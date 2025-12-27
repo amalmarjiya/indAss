@@ -9,3 +9,6 @@ __pycache__/
 # IDE
 .idea/
 .vscode/
+
+# data
+ted_talks_en.csv
