@@ -361,66 +361,6 @@ def rag_answer(question: str) -> str:
 
     # Default Task 1
     return answer_precise_fact(question)
-# =========================================================
-# REQUIRED PROMPT SECTION (PDF-required wording)
-# =========================================================
-REQUIRED_SYSTEM_PROMPT = """You are a TED Talk assistant that answers questions strictly and
-only based on the TED dataset context provided to you (metadata
-and transcript passages). You must not use any external
-knowledge, the open internet, or information that is not explicitly
-contained in the retrieved context. If the answer cannot be
-determined from the provided context, respond: “I don’t know
-based on the provided TED data.” Always explain your answer
-using the given context, quoting or paraphrasing the relevant
-transcript or metadata when helpful.
-"""
-
-def get_stats() -> Dict[str, Any]:
-    # Must match EXACT field names in the PDF
-    return {
-        "chunk_size": CHUNK_SIZE,
-        "overlap_ratio": OVERLAP_RATIO,
-        "top_k": TOP_K,
-    }
-
-def _build_context(question: str) -> List[Dict[str, Any]]:
-    """
-    Returns the retrieved context chunks in the required schema:
-    [{talk_id,title,chunk,score}, ...]
-    """
-    matches = normalize_matches(retrieve_matches(question))
-    # Keep it reasonable; you can return all TOP_K if you want
-    ctx = []
-    for m in matches[:TOP_K]:
-        ctx.append({
-            "talk_id": m["talk_id"],
-            "title": m["title"],
-            "chunk": m["chunk"],
-            "score": m["score"],
-        })
-    return ctx
-
-def rag_answer_api(question: str) -> Dict[str, Any]:
-    """
-    This is what /api/prompt returns (required format in the PDF).
-    """
-    ctx = _build_context(question)
-
-    # We keep your existing routing/answers
-    final_answer = rag_answer(question)
-
-    # Provide the prompts used. If a specific function uses a different
-    # system prompt, we still include the required section here so you're compliant.
-    augmented = {
-        "System": REQUIRED_SYSTEM_PROMPT,
-        "User": question,
-    }
-
-    return {
-        "response": final_answer,
-        "context": ctx,
-        "Augmented_prompt": augmented,
-    }
 
 
 # =========================================================
