@@ -342,25 +342,75 @@ def answer_recommendation(question: str) -> str:
 # =========================================================
 # SIMPLE ROUTER (one endpoint can handle all 4)
 # =========================================================
-def rag_answer(question: str) -> str:
-    print("RAG ANSWER CALLED FROM:", __file__)
-    print("RAG QUESTION:", question)
+def rag_answer_api(question: str) -> Dict[str, Any]:
+    # 1. Retrieve matches
+    matches = normalize_matches(retrieve_matches(question))
+
+    # Build context (PDF format)
+    context = [
+        {
+            "talk_id": m["talk_id"],
+            "title": m["title"],
+            "chunk": m["chunk"],
+            "score": m["score"],
+        }
+        for m in matches[:TOP_K]
+    ]
+
+    if not matches:
+        return {
+            "response": "I don’t know based on the provided TED data.",
+            "context": [],
+            "Augmented_prompt": {
+                "System": REQUIRED_SYSTEM_PROMPT,
+                "User": question,
+            },
+        }
+
     q = question.lower()
 
-    # Task 2 indicators
-    if "exactly 3" in q or ("list" in q and "3" in q and "title" in q):
-        return answer_multi_result_titles(question, n=3)
+    # ===============================
+    # TASK 2 — EXACTLY 3 TALK TITLES
+    # ===============================
+    if "exactly 3" in q and "title" in q:
+        talks = top_unique_talks(matches, n=3)
 
-    # Task 4 indicators
-    if "recommend" in q or "which talk would you recommend" in q:
-        return answer_recommendation(question)
+        if len(talks) < 3:
+            final_answer = "I don’t know based on the provided TED data."
+        else:
+            final_answer = [
+                t["title"] for t in talks
+            ]
 
-    # Task 3 indicators
-    if "summary" in q or "key idea" in q:
-        return answer_key_idea_summary(question)
+    # ===============================
+    # TASK 1 — PRECISE FACT
+    # ===============================
+    elif "provide the title" in q and "speaker" in q:
+        t = top_unique_talks(matches, n=1)[0]
+        final_answer = f"Title: {t['title']}\nSpeaker: {t['speaker_1']}"
 
-    # Default Task 1
-    return answer_precise_fact(question)
+    # ===============================
+    # DEFAULT — LLM ANSWER
+    # ===============================
+    else:
+        resp = client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": REQUIRED_SYSTEM_PROMPT},
+                {"role": "user", "content": question},
+            ],
+        )
+        final_answer = resp.choices[0].message.content
+
+    return {
+        "response": final_answer,
+        "context": context,
+        "Augmented_prompt": {
+            "System": REQUIRED_SYSTEM_PROMPT,
+            "User": question,
+        },
+    }
+
 # =========================================================
 # REQUIRED PROMPT SECTION (PDF-required wording)
 # =========================================================
@@ -422,63 +472,6 @@ def rag_answer_api(question: str) -> Dict[str, Any]:
         "Augmented_prompt": augmented,
     }
 
-def rag_answer_full(question: str) -> Dict[str, Any]:
-    # 1. Retrieve matches
-    matches = normalize_matches(retrieve_matches(question))
-
-    if not matches:
-        return {
-            "response": "I don’t know based on the provided TED data.",
-            "context": [],
-            "Augmented_prompt": {
-                "System": "",
-                "User": question
-            }
-        }
-
-    # 2. Pick top talk
-    talks = top_unique_talks(matches, n=1)
-    t = talks[0]
-
-    ctx_chunks = chunks_for_talk(matches, t["talk_id"], k=MAX_CHUNKS_PER_TALK)
-
-    # 3. Build context array (REQUIRED FORMAT)
-    context = [
-        {
-            "talk_id": c["talk_id"],
-            "title": c["title"],
-            "chunk": c["chunk"],
-            "score": c["score"]
-        }
-        for c in ctx_chunks
-    ]
-
-    # 4. Build prompts
-    system_prompt = SYSTEM_PROMPT_SUMMARY
-    user_prompt = (
-        f"Question: {question}\n\n"
-        f"Use the following context to answer."
-    )
-
-    # 5. Call model
-    resp = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt + "\n\n" + "\n".join(
-                [c["chunk"] for c in ctx_chunks]
-            )},
-        ],
-    )
-
-    return {
-        "response": resp.choices[0].message.content,
-        "context": context,
-        "Augmented_prompt": {
-            "System": system_prompt,
-            "User": user_prompt
-        }
-    }
 
 # =========================================================
 # OPTIONAL: LOCAL QUICK TEST
