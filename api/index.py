@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from indass.assignment import rag_answer_api, get_stats
+# IMPORTANT: absolute import
+from indass.assignment import rag_answer, index as pinecone_index
 
 app = FastAPI()
 
@@ -10,15 +11,11 @@ class PromptRequest(BaseModel):
     question: str
 
 
-@app.get("/api/stats")
-def stats():
-    return {
-        "chunk_size": 1024,
-        "overlap_ratio": 0.2,
-        "top_k": 30
-    }
+@app.post("/api/prompt")
+def prompt(req: PromptRequest):
+    return {"response": rag_answer(req.question)}
 
 
 @app.get("/api/stats")
 def stats():
-    return get_stats()
+    return pinecone_index.describe_index_stats()
