@@ -337,6 +337,55 @@ def answer_recommendation(question: str) -> str:
         ],
     )
     return resp.choices[0].message.content
+# =========================================================
+# REQUIRED BY ASSIGNMENT API
+# =========================================================
+
+REQUIRED_SYSTEM_PROMPT = """You are a TED Talk assistant that answers questions strictly and
+only based on the TED dataset context provided to you (metadata
+and transcript passages). You must not use any external
+knowledge. If the answer cannot be determined from the provided
+context, respond: "I don’t know based on the provided TED data."
+"""
+
+def get_stats() -> Dict[str, Any]:
+    """
+    Required GET /api/stats
+    """
+    return {
+        "chunk_size": CHUNK_SIZE,
+        "overlap_ratio": OVERLAP_RATIO,
+        "top_k": TOP_K
+    }
+
+
+def rag_answer_api(question: str) -> Dict[str, Any]:
+    """
+    Required POST /api/prompt
+    Returns EXACT format required by the PDF
+    """
+    matches = normalize_matches(retrieve_matches(question))
+
+    context = [
+        {
+            "talk_id": m["talk_id"],
+            "title": m["title"],
+            "chunk": m["chunk"],
+            "score": m["score"]
+        }
+        for m in matches[:TOP_K]
+    ]
+
+    final_answer = rag_answer(question)
+
+    return {
+        "response": final_answer,
+        "context": context,
+        "Augmented_prompt": {
+            "System": REQUIRED_SYSTEM_PROMPT,
+            "User": question
+        }
+    }
 
 
 # =========================================================
