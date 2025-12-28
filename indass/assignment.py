@@ -67,7 +67,7 @@ index = pc.Index(name=PINECONE_INDEX, host=PINECONE_HOST)
 
 # =========================================================
 # CHUNKING (used only during ingest)
-# =========================================================
+# ======st===================================================
 enc = tiktoken.get_encoding("cl100k_base")
 
 
@@ -100,7 +100,7 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
 # OPTIONAL: INGEST CSV INTO PINECONE (RUN ONLY WHEN NEEDED)
 # Budget-friendly: you control limit.
 # =========================================================
-def ingest_csv_to_pinecone(csv_path: str, limit: int = 2000, batch_size: int = 50):
+def ingest_csv_to_pinecone(csv_path: str, limit: int = None, batch_size: int = 50):
     df = pd.read_csv(csv_path)
     df = df[["talk_id", "title", "speaker_1", "transcript"]].dropna()
 
@@ -122,7 +122,10 @@ def ingest_csv_to_pinecone(csv_path: str, limit: int = 2000, batch_size: int = 5
             )
 
     print("Total chunks in CSV:", len(records))
-    limit = min(limit, len(records))
+    if limit is not None:
+        limit = min(limit, len(records))
+    else:
+        limit = len(records)
 
     for i in range(0, limit, batch_size):
         batch = records[i : i + batch_size]
@@ -412,10 +415,3 @@ def rag_answer(question: str) -> str:
     return answer_precise_fact(question)
 
 
-# =========================================================
-# OPTIONAL: LOCAL QUICK TEST
-# =========================================================
-if __name__ == "__main__":
-    print(index.describe_index_stats())
-    print()
-    print(rag_answer("Find a TED talk that discusses overcoming fear or anxiety. Provide the title and speaker."))
