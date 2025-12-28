@@ -342,75 +342,25 @@ def answer_recommendation(question: str) -> str:
 # =========================================================
 # SIMPLE ROUTER (one endpoint can handle all 4)
 # =========================================================
-def rag_answer_api(question: str) -> Dict[str, Any]:
-    # 1. Retrieve matches
-    matches = normalize_matches(retrieve_matches(question))
-
-    # Build context (PDF format)
-    context = [
-        {
-            "talk_id": m["talk_id"],
-            "title": m["title"],
-            "chunk": m["chunk"],
-            "score": m["score"],
-        }
-        for m in matches[:TOP_K]
-    ]
-
-    if not matches:
-        return {
-            "response": "I don’t know based on the provided TED data.",
-            "context": [],
-            "Augmented_prompt": {
-                "System": REQUIRED_SYSTEM_PROMPT,
-                "User": question,
-            },
-        }
-
+def rag_answer(question: str) -> str:
+    print("RAG ANSWER CALLED FROM:", __file__)
+    print("RAG QUESTION:", question)
     q = question.lower()
 
-    # ===============================
-    # TASK 2 — EXACTLY 3 TALK TITLES
-    # ===============================
-    if "exactly 3" in q and "title" in q:
-        talks = top_unique_talks(matches, n=3)
+    # Task 2 indicators
+    if "exactly 3" in q or ("list" in q and "3" in q and "title" in q):
+        return answer_multi_result_titles(question, n=3)
 
-        if len(talks) < 3:
-            final_answer = "I don’t know based on the provided TED data."
-        else:
-            final_answer = [
-                t["title"] for t in talks
-            ]
+    # Task 4 indicators
+    if "recommend" in q or "which talk would you recommend" in q:
+        return answer_recommendation(question)
 
-    # ===============================
-    # TASK 1 — PRECISE FACT
-    # ===============================
-    elif "provide the title" in q and "speaker" in q:
-        t = top_unique_talks(matches, n=1)[0]
-        final_answer = f"Title: {t['title']}\nSpeaker: {t['speaker_1']}"
+    # Task 3 indicators
+    if "summary" in q or "key idea" in q:
+        return answer_key_idea_summary(question)
 
-    # ===============================
-    # DEFAULT — LLM ANSWER
-    # ===============================
-    else:
-        resp = client.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=[
-                {"role": "system", "content": REQUIRED_SYSTEM_PROMPT},
-                {"role": "user", "content": question},
-            ],
-        )
-        final_answer = resp.choices[0].message.content
-
-    return {
-        "response": final_answer,
-        "context": context,
-        "Augmented_prompt": {
-            "System": REQUIRED_SYSTEM_PROMPT,
-            "User": question,
-        },
-    }
-
+    # Default Task 1
+    return answer_precise_fact(question)
 # =========================================================
 # REQUIRED PROMPT SECTION (PDF-required wording)
 # =========================================================
