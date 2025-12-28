@@ -422,6 +422,63 @@ def rag_answer_api(question: str) -> Dict[str, Any]:
         "Augmented_prompt": augmented,
     }
 
+def rag_answer_full(question: str) -> Dict[str, Any]:
+    # 1. Retrieve matches
+    matches = normalize_matches(retrieve_matches(question))
+
+    if not matches:
+        return {
+            "response": "I don’t know based on the provided TED data.",
+            "context": [],
+            "Augmented_prompt": {
+                "System": "",
+                "User": question
+            }
+        }
+
+    # 2. Pick top talk
+    talks = top_unique_talks(matches, n=1)
+    t = talks[0]
+
+    ctx_chunks = chunks_for_talk(matches, t["talk_id"], k=MAX_CHUNKS_PER_TALK)
+
+    # 3. Build context array (REQUIRED FORMAT)
+    context = [
+        {
+            "talk_id": c["talk_id"],
+            "title": c["title"],
+            "chunk": c["chunk"],
+            "score": c["score"]
+        }
+        for c in ctx_chunks
+    ]
+
+    # 4. Build prompts
+    system_prompt = SYSTEM_PROMPT_SUMMARY
+    user_prompt = (
+        f"Question: {question}\n\n"
+        f"Use the following context to answer."
+    )
+
+    # 5. Call model
+    resp = client.chat.completions.create(
+        model=CHAT_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt + "\n\n" + "\n".join(
+                [c["chunk"] for c in ctx_chunks]
+            )},
+        ],
+    )
+
+    return {
+        "response": resp.choices[0].message.content,
+        "context": context,
+        "Augmented_prompt": {
+            "System": system_prompt,
+            "User": user_prompt
+        }
+    }
 
 # =========================================================
 # OPTIONAL: LOCAL QUICK TEST
